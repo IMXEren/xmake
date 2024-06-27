@@ -21,6 +21,7 @@
 -- imports
 import("core.project.config")
 import("lib.detect.find_path")
+import("lib.detect.find_tool")
 import("detect.sdks.find_cross_toolchain")
 
 -- check the cross toolchain
@@ -29,6 +30,34 @@ function main(toolchain)
     -- get sdk directory
     local sdkdir = toolchain:sdkdir()
     local bindir = toolchain:bindir()
+
+    -- find and locate sdk directory
+    if not sdkdir then
+        import("lib.detect.find_tool")
+        local tool = find_tool("cosmocc", { paths = "$(env PATH)" })
+        local sh = find_tool("sh") or find_tool("bash") or find_tool("zsh")
+        local cosmocc
+        if sh then
+            local find
+            if os.is_host("windows") then
+                find = "where cosmocc || echo"
+            else
+                find = "command -v cosmocc || echo"
+            end
+            cosmocc, _ = os.iorunv(sh.program, { "-c", find })
+            local first_line = string.gmatch(cosmocc, "[^\n]+")()
+            if first_line then
+                cosmocc = first_line:trim()
+            end
+        end
+
+        if tool and path.basename(tool.program) == "cosmocc" then
+            cosmocc = tool.program
+        end
+        if cosmocc then
+            sdkdir = path.directory(path.directory(path.translate(cosmocc)))
+        end
+    end
 
     -- find cross toolchain from external envirnoment
     local cross_toolchain = find_cross_toolchain(sdkdir, {bindir = bindir})
